@@ -47,9 +47,13 @@ class RaydiumSwap {
    * @async
    * @returns {Promise<void>}
    */
+  getWalletPublicKey() {
+    return this.wallet.publicKey.toString();
+  }
   async loadPoolKeys(liquidityFile: string) {
+    console.log(liquidityFile);
     const liquidityJsonResp = await fetch(liquidityFile);
-    if (!liquidityJsonResp.ok) return;
+    if (!liquidityJsonResp.ok) return [];
     const liquidityJson = (await liquidityJsonResp.json()) as {
       official: any;
       unOfficial: any;
@@ -60,6 +64,8 @@ class RaydiumSwap {
     ];
 
     this.allPoolKeysJson = allPoolKeysJson;
+    console.log(this.allPoolKeysJson, "ddd");
+    return allPoolKeysJson;
   }
 
   /**
@@ -69,6 +75,7 @@ class RaydiumSwap {
    * @returns {LiquidityPoolKeys | null} The liquidity pool keys if found, otherwise null.
    */
   findPoolInfoForTokens(mintA: string, mintB: string) {
+    console.log(this.allPoolKeysJson);
     const poolData = this.allPoolKeysJson.find(
       (i) =>
         (i.baseMint === mintA && i.quoteMint === mintB) ||
