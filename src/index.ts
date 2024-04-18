@@ -35,8 +35,6 @@ const swap = async (swapConfig) => {
   /**
    * Load pool keys from the Raydium API to enable finding pool information.
    */
-  await raydiumSwap.loadPoolKeys(swapConfig.liquidityFile);
-  console.log(`Loaded pool keys`);
 
   /**
    * Find pool information for the given token pair.
@@ -103,8 +101,6 @@ const fetchTokenPrice = async (tokenAddress) => {
   // console.log(data);
   // Example: Log the price of a specific token in USD
   const tokenPriceInUSD = data.data[tokenAddress];
-  console.log("price    ", tokenPriceInUSD);
-
   // return await response1.toJSON();
   return { usdPrice: tokenPriceInUSD.price };
 };
@@ -128,57 +124,8 @@ const getSPL = async (address) => {
 
 let avgAmount = 0;
 
-// setInterval(async () => {
-//   timer++;
-
-//   if (timer % 10 == 0 && timer > 0) {
-//     const spls = await getSPL(raydiumSwap.getWalletPublicKey());
-//     console.log(spls);
-
-//     const currentTokenAmount = spls.map((splToken) => {
-//       return splToken.mint == process.env.TOKEN_MINT && splToken.amount;
-//     });
-//     console.log(currentTokenAmount);
-
-//     const solCurrentAmount = await fetchSolAmount(
-//       raydiumSwap.getWalletPublicKey()
-//     );
-//     console.log(solCurrentAmount);
-
-//     if (avgAmount / 10 < amountThreshold) {
-//       // Sell
-//     } else {
-//       // Buy
-//     }
-//     amountThreshold = avgAmount / 10;
-//     avgAmount = 0;
-//     timer = -1;
-//   } else {
-//     const solPrice = await fetchTokenPrice(
-//       "So11111111111111111111111111111111111111112"
-//     );
-
-//     const tokenPrice = await fetchTokenPrice(process.env.TOKEN_MINT);
-
-//     if (amountThreshold == 0)
-//       amountThreshold = solPrice.usdPrice / tokenPrice.usdPrice;
-
-//     avgAmount += solPrice.usdPrice / tokenPrice.usdPrice;
-//     console.log(
-//       solPrice.usdPrice,
-//       "     ",
-//       tokenPrice.usdPrice,
-//       "    ",
-//       amountThreshold,
-//       "     ",
-//       avgAmount
-//     );
-//   }
-// }, 3000);
-
 const main = async () => {
-  const res = await raydiumSwap.loadPoolKeys(config.liquidityFile);
-  console.log(res);
+  // const res = await raydiumSwap.loadPoolKeys(config.liquidityFile);
   // console.log(process.env.TOKEN_MINT);
   // console.log(
   //   await raydiumSwap.findPoolInfoForTokens(
@@ -186,6 +133,80 @@ const main = async () => {
   //     process.env.TOKEN_MINT
   //   )
   // );
+  const pools = await raydiumSwap.loadPoolKeys(config.liquidityFile);
+  console.log(pools.length);
+  if (pools.length == 0) {
+    await main();
+    return;
+  }
+  console.log(`Loaded pool keys`, pools.length);
+
+  setInterval(async () => {
+    timer++;
+
+    if (timer % 10 == 0 && timer > 0) {
+      const spls = await getSPL(raydiumSwap.getWalletPublicKey());
+      console.log(
+        "transaction creating!!!",
+        spls.length,
+        raydiumSwap.getWalletPublicKey()
+      );
+
+      const curToken = spls.find((splToken) => {
+        return splToken.mint == process.env.TOKEN_MINT && splToken.amount;
+      });
+      let currentTokenAmount = 0;
+      if (curToken) currentTokenAmount = parseFloat(curToken.amount);
+      console.log("USDT: ", currentTokenAmount);
+
+      const solCurrentAmount = await fetchSolAmount(
+        raydiumSwap.getWalletPublicKey()
+      );
+      console.log("SOL: ", solCurrentAmount.solana);
+
+      if (avgAmount / 10 < amountThreshold && currentTokenAmount > 0) {
+        // Sell
+        let swapConfig = config;
+        swapConfig.tokenAAddress = process.env.TOKEN_MINT;
+        swapConfig.tokenBAddress = process.env.SOL_MINT;
+        swapConfig.tokenAAmount = currentTokenAmount;
+        swap(swapConfig);
+      } else if (
+        avgAmount / 10 >= amountThreshold &&
+        parseFloat(solCurrentAmount.solana) > 0.0006
+      ) {
+        // Buy
+        let swapConfig = config;
+        swapConfig.tokenBAddress = process.env.TOKEN_MINT;
+        swapConfig.tokenAAddress = process.env.SOL_MINT;
+        swapConfig.tokenAAmount = parseFloat(solCurrentAmount.solana) - 0.0006;
+        swap(swapConfig);
+      }
+      amountThreshold = avgAmount / 10;
+      avgAmount = 0;
+      timer = -1;
+    } else {
+      const solPrice = await fetchTokenPrice(
+        "So11111111111111111111111111111111111111112"
+      );
+
+      const tokenPrice = await fetchTokenPrice(process.env.TOKEN_MINT);
+
+      if (amountThreshold == 0)
+        amountThreshold = solPrice.usdPrice / tokenPrice.usdPrice;
+
+      avgAmount += solPrice.usdPrice / tokenPrice.usdPrice;
+      console.log(
+        solPrice.usdPrice,
+        "     ",
+        tokenPrice.usdPrice,
+        "    ",
+        amountThreshold,
+        "     ",
+        avgAmount
+      );
+    }
+  }, 3000);
 };
 
 main();
